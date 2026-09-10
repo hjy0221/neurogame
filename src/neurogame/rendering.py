@@ -48,16 +48,45 @@ class PygameRenderer:
 
         agent = world.agent
         pos = (int(agent.x), int(agent.y))
-        pg.draw.circle(self.screen, (237, 238, 138), pos, int(cfg.agent_radius))
-        nose = (
-            int(agent.x + cos(agent.heading) * 17),
-            int(agent.y + sin(agent.heading) * 17),
-        )
-        pg.draw.line(self.screen, (255, 184, 77), pos, nose, 3)
+        self._draw_bug(agent)
         pg.draw.rect(self.screen, (43, 50, 57), game_rect, 2)
 
         self._draw_sidebar(world, snapshot, observation, paused, plasticity_enabled)
         pg.display.flip()
+
+    def _draw_bug(self, agent) -> None:
+        """Draw a readable insect avatar aligned with the agent heading."""
+        pg = self.pg
+        heading = agent.heading
+        forward = np.array([cos(heading), sin(heading)], dtype=float)
+        side = np.array([-forward[1], forward[0]], dtype=float)
+        center = np.array([agent.x, agent.y], dtype=float)
+
+        def point(offset):
+            value = center + forward * offset[0] + side * offset[1]
+            return int(value[0]), int(value[1])
+
+        # Six legs give the agent a clear insect silhouette at game scale.
+        for offset in (-8, 0, 8):
+            for sign in (-1, 1):
+                hip = point((offset, sign * 5))
+                knee = point((offset - 3, sign * 14))
+                foot = point((offset - 7, sign * 17))
+                pg.draw.line(self.screen, (111, 159, 126), hip, knee, 2)
+                pg.draw.line(self.screen, (111, 159, 126), knee, foot, 2)
+
+        for offset, radius in ((-8, 6), (0, 8), (9, 10)):
+            pg.draw.circle(self.screen, (196, 226, 112), point((offset, 0)), radius)
+            pg.draw.circle(self.screen, (55, 100, 72), point((offset, 0)), radius, 1)
+
+        head = np.array(point((13, 0)), dtype=float)
+        for sign in (-1, 1):
+            base = np.array(point((16, sign * 4)), dtype=float)
+            tip = np.array(point((25, sign * 11)), dtype=float)
+            pg.draw.line(self.screen, (235, 205, 116), base.astype(int), tip.astype(int), 1)
+            pg.draw.circle(self.screen, (255, 211, 92), tip.astype(int), 2)
+            eye = np.array(point((15, sign * 4)), dtype=float)
+            pg.draw.circle(self.screen, (35, 43, 38), eye.astype(int), 2)
 
     def _draw_sensor_rays(self, world: FoodWorld, observation: np.ndarray) -> None:
         pg = self.pg
