@@ -1,24 +1,25 @@
-# NeuroGame Agent Notes
+# NeuroGame 작업 안내
 
-NeuroGame v0.1 is intentionally a compact research toy, not a faithful fly-brain simulation.
+NeuroGame v0.1은 실제 초파리 뇌를 재현하는 시스템이 아니라, 생물학적 신경망을 이해하기 위한 작은 연구용 실험입니다.
 
-## Project Shape
+## 프로젝트 구성
 
-- Keep neural dynamics in `src/neurogame/brain.py`.
-- Keep game physics and observations in `src/neurogame/environment.py`.
-- Keep Pygame rendering and event handling in `src/neurogame/app.py`.
-- Keep tests deterministic and fast; prefer seeded random generators.
+- 신경 동역학: `src/neurogame/brain.py`
+- 게임 물리와 감각 입력: `src/neurogame/environment.py`
+- Pygame 화면과 입력 처리: `src/neurogame/app.py`, `src/neurogame/rendering.py`
+- 테스트: `tests/`
 
-## Design Direction
+## 개발 방향
 
-- The controller should remain NumPy-first.
-- Avoid pulling in machine-learning frameworks unless a future version explicitly needs them.
-- Preserve the boundary between environment observations, neural dynamics, and action decoding so a future connectome graph loader can replace the synthetic recurrent graph.
+- 신경망 계산은 NumPy 중심으로 유지합니다.
+- 실제로 필요할 때까지 머신러닝 프레임워크를 추가하지 않습니다.
+- 환경 입력, 신경 동역학, 행동 출력을 분리해 향후 커넥톰 그래프로 교체할 수 있게 합니다.
+- 난수 시드를 사용해 테스트 결과를 재현 가능하게 유지합니다.
 
-## v0.1 Scope
+## v0.1 범위
 
-- Roughly 500 recurrent/spiking-style artificial neurons.
-- 2D Pygame food-seeking environment.
-- Visual/distance sensor inputs.
-- Realtime visualization of neuron activity.
-- Lightweight reward-gated plasticity.
+- 약 500개의 순환형 스파이킹 스타일 인공 뉴런
+- 먹이 찾기 2D Pygame 환경
+- 시각·거리 센서 입력
+- 입력층 → 순환 중간층 → 출력층 활동 시각화
+- 가벼운 보상 기반 가소성
