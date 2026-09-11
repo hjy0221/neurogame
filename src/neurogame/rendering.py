@@ -7,6 +7,7 @@ import numpy as np
 from neurogame.brain import BrainSnapshot
 from neurogame.config import EnvConfig, RenderConfig
 from neurogame.environment import FoodWorld
+from neurogame.reinforcement import LearningSnapshot
 
 
 class PygameRenderer:
@@ -19,7 +20,10 @@ class PygameRenderer:
         self.pg.display.set_caption("NeuroGame v0.1")
         self.font = self.pg.font.SysFont("Menlo", 15)
         self.small_font = self.pg.font.SysFont("Menlo", 12)
-        self.input_groups = [np.arange(0, 4), np.arange(4, 8), np.arange(8, 11), np.array([11])]
+        self.input_groups = [
+            np.arange(0, 4), np.arange(4, 8), np.arange(8, 11), np.array([11]),
+            np.arange(12, 15), np.arange(15, 18)
+        ]
         self.hidden_groups = [group for group in np.array_split(brain.hidden_idx, 6) if len(group)]
         self.input_links = np.array([[np.abs(brain.input_weights[np.ix_(a, b)]).sum()
                                      for b in self.hidden_groups] for a in self.input_groups])
@@ -33,6 +37,8 @@ class PygameRenderer:
         observation: np.ndarray,
         paused: bool,
         plasticity_enabled: bool,
+        rl_enabled: bool,
+        learning: LearningSnapshot,
     ) -> None:
         pg = self.pg
         cfg = self.env_config
@@ -40,9 +46,22 @@ class PygameRenderer:
 
         game_rect = pg.Rect(0, 0, cfg.width, cfg.height)
         pg.draw.rect(self.screen, (19, 25, 30), game_rect)
-        self._draw_sensor_rays(world, observation)
 
-        for food in world.food:
+        entry_top, entry_bottom = world.exit_bounds
+        entry_height = max(12, int(entry_bottom - entry_top - 10))
+        entry_y = int(entry_top + 5)
+        pg.draw.rect(self.screen, (47, 118, 164), pg.Rect(25, entry_y, 25, entry_height), border_radius=4)
+        pg.draw.rect(self.screen, (55, 171, 109), pg.Rect(670, entry_y, 25, entry_height), border_radius=4)
+        label_y = int((entry_top + entry_bottom) / 2 - 7)
+        self._text("IN", 27, label_y, (225, 241, 250), self.small_font)
+        self._text("OUT", 667, label_y, (225, 250, 233), self.small_font)
+
+        for wall in world.walls:
+            rect = pg.Rect(int(wall.x), int(wall.y), int(wall.width), int(wall.height))
+            pg.draw.rect(self.screen, (79, 91, 101), rect, border_radius=3)
+            pg.draw.line(self.screen, (130, 145, 156), rect.topleft, rect.topright, 2)
+
+        for food in world.food[world.food_active]:
             pg.draw.circle(self.screen, (104, 211, 145), food.astype(int), int(cfg.food_radius))
             pg.draw.circle(self.screen, (25, 70, 44), food.astype(int), int(cfg.food_radius), 1)
 
@@ -51,7 +70,9 @@ class PygameRenderer:
         self._draw_bug(agent)
         pg.draw.rect(self.screen, (43, 50, 57), game_rect, 2)
 
-        self._draw_sidebar(world, snapshot, observation, paused, plasticity_enabled)
+        self._draw_sidebar(
+            world, snapshot, observation, paused, plasticity_enabled, rl_enabled, learning
+        )
         pg.display.flip()
 
     def _draw_bug(self, agent) -> None:
@@ -108,6 +129,8 @@ class PygameRenderer:
         observation: np.ndarray,
         paused: bool,
         plasticity_enabled: bool,
+        rl_enabled: bool,
+        learning: LearningSnapshot,
     ) -> None:
         pg = self.pg
         x0 = self.env_config.width
@@ -117,9 +140,14 @@ class PygameRenderer:
 
         rows = [
             f"NeuroGame / {len(snapshot.spikes)} neurons",
-            f"food: {world.food_eaten}   reward: {world.total_reward:.2f}",
+            f"food: {world.food_eaten}/{world.config.food_count}   reward: {world.total_reward:.2f}",
+            f"goal: {'EXIT' if not np.any(world.food_active) else 'COLLECT ALL FOOD'}",
+            f"maze exits: {world.exits_completed}",
+            f"maze level: {world.maze_level}   grid: {world.maze_columns}x{world.maze_rows}",
             f"spikes: {snapshot.mean_rate:.1%}   {'paused' if paused else 'running'}",
             f"plasticity: {'on' if plasticity_enabled else 'off'}",
+            f"RL: {'learning' if rl_enabled else 'off'}   updates: {learning.updates}",
+            f"value: {learning.value:+.3f}   TD: {learning.td_error:+.3f}   explore: {learning.exploration:.2f}",
         ]
         y = 18
         for text in rows:
@@ -128,7 +156,7 @@ class PygameRenderer:
 
         self._draw_network(snapshot, observation)
 
-        help_text = "Space pause / R reset / P learn / Esc"
+        help_text = "Space pause / R reset / P plasticity / L RL / Esc"
         self._text(help_text, x0 + 18, self.env_config.height - 28, (128, 140, 151), self.small_font)
 
     def _draw_bars(self, values: np.ndarray, x: int, y: int, width: int, height: int, color: tuple[int, int, int]) -> None:
@@ -162,7 +190,7 @@ class PygameRenderer:
                 pg.draw.aaline(self.screen, color, start, end)
                 normal = np.array([-direction[1], direction[0]])
                 pg.draw.polygon(self.screen, color, [end, end - direction * 6 + normal * 3, end - direction * 6 - normal * 3])
-        labels = [["Left food", "Right food", "Walls", "Distance"],
+        labels = [["Left food", "Right food", "Walls", "Food dist", "Exit", "Nearest food"],
                   [f"{len(g)} neurons" for g in self.hidden_groups],
                   ["Left", "Forward", "Right"]]
         accents = [(40, 143, 196), (35, 155, 121), (212, 134, 42)]

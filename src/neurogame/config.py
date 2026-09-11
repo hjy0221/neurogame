@@ -4,7 +4,7 @@ from dataclasses import dataclass
 @dataclass(frozen=True)
 class BrainConfig:
     neuron_count: int = 500
-    sensory_count: int = 12
+    sensory_count: int = 18
     motor_count: int = 3
     connection_probability: float = 0.025
     inhibitory_fraction: float = 0.2
@@ -29,10 +29,26 @@ class EnvConfig:
     sensor_range: float = 190.0
     max_speed: float = 3.0
     turn_rate: float = 0.18
-    food_count: int = 6
+    food_count: int = 14
     step_penalty: float = -0.001
     wall_penalty: float = -0.02
     food_reward: float = 1.0
+    exit_reward: float = 8.0
+    waypoint_reward: float = 0.12
+    all_food_bonus: float = 3.0
+    locked_exit_penalty: float = -0.1
+    progress_reward_scale: float = 0.015
+    exit_progress_reward_scale: float = 0.03
+
+
+@dataclass(frozen=True)
+class ReinforcementConfig:
+    gamma: float = 0.98
+    actor_learning_rate: float = 0.0001
+    critic_learning_rate: float = 0.002
+    exploration_start: float = 0.04
+    exploration_end: float = 0.01
+    exploration_decay_steps: int = 30_000
 
 
 @dataclass(frozen=True)
