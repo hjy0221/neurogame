@@ -19,8 +19,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--steps", type=int, default=0, help="Stop after this many steps. 0 means keep running.")
     parser.add_argument("--no-plasticity", action="store_true", help="Disable reward-gated plasticity.")
     parser.add_argument("--no-rl", action="store_true", help="Disable actor-critic reinforcement learning.")
-    parser.add_argument("--model", default="models/forager_exit.npz", help="RL model to load when present.")
+    parser.add_argument("--model", default="models/lstm_ppo_v2.pt", help="LSTM-PPO model to load when present.")
     parser.add_argument("--save-model", default="", help="Save trained RL weights on exit.")
+    parser.add_argument("--eval", action="store_true", help="Deterministic evaluation: freeze all weights and noise.")
+    parser.add_argument("--episodes", type=int, default=1, help="Number of different seeded environments.")
+    parser.add_argument("--food-count", type=int, default=0, help="Optional food count; the default task is exit-only.")
+    parser.add_argument("--open-world", action="store_true", help="Train without internal maze walls.")
+    parser.add_argument("--maze-columns", type=int, default=9, help="Starting maze columns.")
+    parser.add_argument("--maze-rows", type=int, default=7, help="Starting maze rows.")
     return parser
 
 
@@ -33,18 +39,20 @@ def run_simulation(args: argparse.Namespace) -> dict[str, float]:
     pygame.init()
     brain_config = BrainConfig(
         neuron_count=args.neurons,
-        plasticity_enabled=not args.no_plasticity,
+        plasticity_enabled=not args.no_plasticity and not args.eval,
     )
-    env_config = EnvConfig()
+    env_config = EnvConfig(
+        food_count=args.food_count,
+        maze_enabled=not args.open_world,
+        base_maze_columns=args.maze_columns,
+        base_maze_rows=args.maze_rows,
+    )
     render_config = RenderConfig()
     brain = SpikingBrain(brain_config, seed=args.seed)
     learner = ActorCriticController(seed=args.seed + 2)
     if args.model and Path(args.model).is_file():
-        try:
-            learner.load(args.model)
-        except ValueError:
-            # Input layouts can change between versions; train a fresh compatible model.
-            pass
+        learner.load(args.model)
+    starting_updates = learner.updates
     rl_enabled = not args.no_rl
     world = FoodWorld(env_config, seed=args.seed + 1)
     observation = world.observe()
@@ -60,6 +68,11 @@ def run_simulation(args: argparse.Namespace) -> dict[str, float]:
     paused = False
     running = True
     steps = 0
+    episode = 1
+    completed_reward = 0.0
+    completed_food = 0
+    completed_exits = 0
+    total_step_limit = args.steps * args.episodes if args.steps else 0
 
     while running:
         for event in pygame.event.get():
@@ -71,10 +84,11 @@ def run_simulation(args: argparse.Namespace) -> dict[str, float]:
                 elif event.key == pygame.K_SPACE:
                     paused = not paused
                 elif event.key == pygame.K_r:
+                    learner.reset_memory()
                     observation = world.reset()
                     brain.reset_state()
                     snapshot = brain.step(observation, reward=0.0)
-                elif event.key == pygame.K_p:
+                elif event.key == pygame.K_p and not args.eval:
                     brain.config = BrainConfig(
                         neuron_count=brain.config.neuron_count,
                         sensory_count=brain.config.sensory_count,
@@ -98,15 +112,19 @@ def run_simulation(args: argparse.Namespace) -> dict[str, float]:
         if not paused:
             features = learner.features(observation, snapshot.motor_values)
             if rl_enabled:
-                turn, thrust, action = learner.act(features, training=True)
+                turn, thrust, action = learner.act(features, training=not args.eval)
             else:
                 turn, thrust = brain.decode_action(snapshot.motor_values)
                 action = None
             env_step = world.step(turn, thrust)
             snapshot = brain.step(env_step.observation, reward=env_step.reward)
-            if rl_enabled and action is not None:
+            if rl_enabled and action is not None and not args.eval:
                 next_features = learner.features(env_step.observation, snapshot.motor_values)
-                learner.learn(features, action, env_step.reward, next_features)
+                learner.learn(features, action, env_step.reward, next_features, terminal=env_step.reached_exit)
+                if env_step.reached_exit:
+                    learner.end_episode(next_features)
+            elif env_step.reached_exit:
+                learner.reset_memory()
             observation = env_step.observation
             steps += 1
 
@@ -118,24 +136,43 @@ def run_simulation(args: argparse.Namespace) -> dict[str, float]:
                 paused,
                 brain.config.plasticity_enabled,
                 rl_enabled,
+                not args.eval,
                 learner.snapshot(),
             )
 
-        if args.steps and steps >= args.steps:
+        if args.headless and args.steps and steps % args.steps == 0 and episode < args.episodes:
+            completed_reward += world.total_reward
+            completed_food += world.food_eaten
+            completed_exits += world.exits_completed
+            final_features = learner.features(observation, snapshot.motor_values)
+            if rl_enabled and not args.eval:
+                learner.end_episode(final_features)
+            else:
+                learner.reset_memory()
+            episode += 1
+            world = FoodWorld(env_config, seed=args.seed + episode)
+            brain.reset_state()
+            observation = world.observe()
+            snapshot = brain.step(observation, reward=0.0)
+
+        if total_step_limit and steps >= total_step_limit:
             running = False
 
-        clock.tick(render_config.fps if renderer is not None else 240)
+        clock.tick(render_config.fps if renderer is not None else 0)
 
     pygame.quit()
-    if args.save_model and rl_enabled:
+    if args.save_model and rl_enabled and not args.eval:
+        learner.end_episode(learner.features(observation, snapshot.motor_values))
         learner.save(args.save_model)
     return {
         "steps": float(steps),
-        "total_reward": float(world.total_reward),
-        "food_eaten": float(world.food_eaten),
-        "exits_completed": float(world.exits_completed),
+        "episodes": float(episode),
+        "total_reward": float(completed_reward + world.total_reward),
+        "food_eaten": float(completed_food + world.food_eaten),
+        "exits_completed": float(completed_exits + world.exits_completed),
         "mean_spike_rate": float(snapshot.mean_rate),
         "rl_updates": float(learner.updates),
+        "updates_this_run": float(learner.updates - starting_updates),
         "exploration": float(learner.exploration),
     }
 
@@ -147,12 +184,15 @@ def main(argv: list[str] | None = None) -> int:
     if args.headless:
         print(
             "Headless run complete: "
+            f"mode={'eval' if args.eval else 'train'}, "
+            f"episodes={int(stats['episodes'])}, "
             f"steps={int(stats['steps'])}, "
             f"reward={stats['total_reward']:.3f}, "
             f"food={int(stats['food_eaten'])}, "
             f"exits={int(stats['exits_completed'])}, "
             f"spike_rate={stats['mean_spike_rate']:.3f}, "
             f"rl_updates={int(stats['rl_updates'])}"
+            f", updates_this_run={int(stats['updates_this_run'])}"
         )
     return 0
 

@@ -38,6 +38,7 @@ class PygameRenderer:
         paused: bool,
         plasticity_enabled: bool,
         rl_enabled: bool,
+        rl_training: bool,
         learning: LearningSnapshot,
     ) -> None:
         pg = self.pg
@@ -71,7 +72,7 @@ class PygameRenderer:
         pg.draw.rect(self.screen, (43, 50, 57), game_rect, 2)
 
         self._draw_sidebar(
-            world, snapshot, observation, paused, plasticity_enabled, rl_enabled, learning
+            world, snapshot, observation, paused, plasticity_enabled, rl_enabled, rl_training, learning
         )
         pg.display.flip()
 
@@ -130,6 +131,7 @@ class PygameRenderer:
         paused: bool,
         plasticity_enabled: bool,
         rl_enabled: bool,
+        rl_training: bool,
         learning: LearningSnapshot,
     ) -> None:
         pg = self.pg
@@ -140,13 +142,13 @@ class PygameRenderer:
 
         rows = [
             f"NeuroGame / {len(snapshot.spikes)} neurons",
-            f"food: {world.food_eaten}/{world.config.food_count}   reward: {world.total_reward:.2f}",
-            f"goal: {'EXIT' if not np.any(world.food_active) else 'COLLECT ALL FOOD'}",
+            f"reward: {world.total_reward:.2f}",
+            "goal: FIND EXIT",
             f"maze exits: {world.exits_completed}",
             f"maze level: {world.maze_level}   grid: {world.maze_columns}x{world.maze_rows}",
             f"spikes: {snapshot.mean_rate:.1%}   {'paused' if paused else 'running'}",
             f"plasticity: {'on' if plasticity_enabled else 'off'}",
-            f"RL: {'learning' if rl_enabled else 'off'}   updates: {learning.updates}",
+            f"RL: {'training' if rl_enabled and rl_training else 'evaluation' if rl_enabled else 'off'}   updates: {learning.updates}",
             f"value: {learning.value:+.3f}   TD: {learning.td_error:+.3f}   explore: {learning.exploration:.2f}",
         ]
         y = 18
@@ -190,7 +192,7 @@ class PygameRenderer:
                 pg.draw.aaline(self.screen, color, start, end)
                 normal = np.array([-direction[1], direction[0]])
                 pg.draw.polygon(self.screen, color, [end, end - direction * 6 + normal * 3, end - direction * 6 - normal * 3])
-        labels = [["Left food", "Right food", "Walls", "Food dist", "Exit", "Nearest food"],
+        labels = [["Rear/left wall", "Front/right wall", "Walls", "Goal phase", "Exit", "Target"],
                   [f"{len(g)} neurons" for g in self.hidden_groups],
                   ["Left", "Forward", "Right"]]
         accents = [(40, 143, 196), (35, 155, 121), (212, 134, 42)]

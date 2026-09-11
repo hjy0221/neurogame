@@ -78,7 +78,7 @@ def test_each_exit_increases_maze_grid_and_regenerates_walls():
 
 
 def test_exit_stays_locked_until_all_food_is_eaten():
-    world = FoodWorld(EnvConfig(), seed=11)
+    world = FoodWorld(EnvConfig(food_count=14), seed=11)
     world.agent.x = 666.0
     world.agent.y = float(sum(world.exit_bounds) / 2)
 
@@ -87,3 +87,10 @@ def test_exit_stays_locked_until_all_food_is_eaten():
     assert not result.reached_exit
     assert world.maze_level == 1
     assert world.agent.x == 650.0
+
+
+def test_different_environment_seeds_create_different_mazes():
+    first = FoodWorld(EnvConfig(), seed=101)
+    second = FoodWorld(EnvConfig(), seed=10_001)
+
+    assert first.walls != second.walls

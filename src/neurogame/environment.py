@@ -37,6 +37,7 @@ class FoodWorld:
     def __init__(self, config: EnvConfig | None = None, seed: int | None = None):
         self.config = config or EnvConfig()
         self.rng = np.random.default_rng(seed)
+        self.maze_seed = int(seed if seed is not None else self.rng.integers(0, 2**31))
         self.maze_level = 1
         self.maze_columns = 7
         self.maze_rows = 5
@@ -51,6 +52,7 @@ class FoodWorld:
         self.exits_completed = 0
         self.path_checkpoint = 0
         self.steps = 0
+        self.visited_cells: dict[tuple[int, int], int] = {}
         self.reset()
 
     def reset(self) -> np.ndarray:
@@ -67,6 +69,7 @@ class FoodWorld:
         self.path_checkpoint = 0
         self.total_reward = 0.0
         self.steps = 0
+        self.visited_cells = {}
         self.food_active.fill(True)
         for idx in range(self.config.food_count):
             self.food[idx] = self._random_food_position()
@@ -85,8 +88,16 @@ class FoodWorld:
 
     def _make_maze(self) -> list[MazeWall]:
         """Build a deterministic perfect maze with branches and dead ends."""
-        columns = min(8 + self.maze_level, 17)
-        rows = min(7 + 2 * ((self.maze_level - 1) // 2), 13)
+        if not self.config.maze_enabled:
+            self.maze_columns, self.maze_rows = 1, 1
+            self.maze_geometry = (25.0, 25.0, 670.0, 470.0)
+            self.entrance_position = np.array([55.0, 260.0], dtype=np.float32)
+            self.exit_bounds = (210.0, 310.0)
+            self.maze_passages = set()
+            self.exit_path = np.array([[55.0, 260.0], [690.0, 260.0]], dtype=np.float32)
+            return []
+        columns = min(self.config.base_maze_columns + self.maze_level - 1, 17)
+        rows = min(self.config.base_maze_rows + 2 * ((self.maze_level - 1) // 2), 13)
         self.maze_columns, self.maze_rows = columns, rows
         left, top, right, bottom = 25.0, 25.0, 695.0, 495.0
         cell_width = (right - left) / columns
@@ -101,7 +112,7 @@ class FoodWorld:
             top + (entrance_row + 1) * cell_height,
         )
 
-        maze_rng = np.random.default_rng(2026 + self.maze_level * 7919)
+        maze_rng = np.random.default_rng(self.maze_seed + self.maze_level * 7919)
         visited = {(0, entrance_row)}
         stack = [(0, entrance_row)]
         passages: set[frozenset[tuple[int, int]]] = set()
@@ -178,7 +189,6 @@ class FoodWorld:
             float(np.min(np.linalg.norm(active_food - old_agent_pos, axis=1)))
             if len(active_food) else 0.0
         )
-        old_path_progress = self._path_progress(old_agent_pos)
         turn = float(np.clip(turn, -1.0, 1.0))
         thrust = float(np.clip(thrust, 0.0, 1.0))
 
@@ -242,6 +252,7 @@ class FoodWorld:
             self.maze_level += 1
             self.walls = self._make_maze()
             self.path_checkpoint = 0
+            self.visited_cells = {}
             for idx in range(self.config.food_count):
                 self.food[idx] = self._random_food_position()
             self.food_active.fill(True)
@@ -252,6 +263,12 @@ class FoodWorld:
 
         observation = self.observe()
         current_agent_pos = np.array([self.agent.x, self.agent.y], dtype=np.float32)
+        if not reached_exit:
+            cell = self._cell_for(current_agent_pos)
+            visits = self.visited_cells.get(cell, 0)
+            if visits == 0 or cell != self._cell_for(old_agent_pos):
+                reward += cfg.novelty_reward if visits == 0 else -cfg.revisit_penalty * min(visits, 10)
+                self.visited_cells[cell] = visits + 1
         remaining_food = self.food[self.food_active]
         new_distances = (
             np.linalg.norm(remaining_food - current_agent_pos, axis=1)
@@ -261,16 +278,6 @@ class FoodWorld:
             progress = old_nearest_distance - float(np.min(new_distances))
             shaped_reward = cfg.progress_reward_scale * progress / max(cfg.max_speed, 1e-6)
             reward += float(np.clip(shaped_reward, -cfg.progress_reward_scale, cfg.progress_reward_scale))
-        if not len(remaining_food) and not reached_exit:
-            exit_progress = self._path_progress(current_agent_pos) - old_path_progress
-            exit_shaping = cfg.exit_progress_reward_scale * exit_progress
-            reward += float(np.clip(
-                exit_shaping, -cfg.exit_progress_reward_scale, cfg.exit_progress_reward_scale
-            ))
-            reached_checkpoint = max(0, int(self._path_progress(current_agent_pos)))
-            if reached_checkpoint > self.path_checkpoint:
-                reward += cfg.waypoint_reward * (reached_checkpoint - self.path_checkpoint)
-                self.path_checkpoint = reached_checkpoint
 
         self.steps += 1
         self.total_reward += reward
@@ -287,41 +294,12 @@ class FoodWorld:
         index = int(np.argmin(distances))
         return float(index - distances[index] / 100.0)
 
-    def _navigation_target(self, start_position: np.ndarray,
-                           goal_position: np.ndarray) -> np.ndarray:
+    def _cell_for(self, position: np.ndarray) -> tuple[int, int]:
         left, top, cell_width, cell_height = self.maze_geometry
-
-        def cell_for(position: np.ndarray) -> tuple[int, int]:
-            column = int(np.clip((float(position[0]) - left) / cell_width, 0, self.maze_columns - 1))
-            row = int(np.clip((float(position[1]) - top) / cell_height, 0, self.maze_rows - 1))
-            return column, row
-
-        start = cell_for(start_position)
-        goal = cell_for(goal_position)
-        if start == goal:
-            return goal_position
-        frontier = [start]
-        parents: dict[tuple[int, int], tuple[int, int] | None] = {start: None}
-        while frontier:
-            cell = frontier.pop(0)
-            if cell == goal:
-                break
-            for passage in self.maze_passages:
-                if cell not in passage:
-                    continue
-                neighbor = next(item for item in passage if item != cell)
-                if neighbor not in parents:
-                    parents[neighbor] = cell
-                    frontier.append(neighbor)
-        next_cell = goal
-        while parents.get(next_cell) not in (None, start):
-            next_cell = parents[next_cell]
-        if parents.get(next_cell) is None:
-            return goal_position
-        return np.array([
-            left + (next_cell[0] + 0.5) * cell_width,
-            top + (next_cell[1] + 0.5) * cell_height,
-        ], dtype=np.float32)
+        return (
+            int(np.clip((float(position[0]) - left) / cell_width, 0, self.maze_columns - 1)),
+            int(np.clip((float(position[1]) - top) / cell_height, 0, self.maze_rows - 1)),
+        )
 
     def observe(self) -> np.ndarray:
         cfg = self.config
@@ -331,23 +309,26 @@ class FoodWorld:
         distances = np.linalg.norm(rel, axis=1)
         angles = np.array([wrap_angle(atan2(y, x) - self.agent.heading) for x, y in rel], dtype=np.float32)
 
-        ray_angles = np.linspace(-pi * 0.75, pi * 0.75, 8, dtype=np.float32)
-        food_rays = np.zeros(8, dtype=np.float32)
-        for idx, ray in enumerate(ray_angles):
-            angular_gain = np.exp(-((wrap_angle(angles - ray)) ** 2) / 0.22)
-            distance_gain = np.clip(1.0 - distances / cfg.sensor_range, 0.0, 1.0)
-            food_rays[idx] = float(np.max(angular_gain * distance_gain)) if len(distances) else 0.0
+        lidar_angles = np.linspace(-pi, pi, 8, endpoint=False, dtype=np.float32)
+        wall_rays = np.array([
+            1.0 - np.clip(
+                distance_to_wall(self.agent, cfg, float(ray), self.walls, self.exit_bounds)
+                / cfg.sensor_range,
+                0.0,
+                1.0,
+            )
+            for ray in lidar_angles
+        ], dtype=np.float32)
 
-        front_wall = distance_to_wall(self.agent, cfg, 0.0, self.walls) / cfg.sensor_range
-        left_wall = distance_to_wall(self.agent, cfg, -pi / 3, self.walls) / cfg.sensor_range
-        right_wall = distance_to_wall(self.agent, cfg, pi / 3, self.walls) / cfg.sensor_range
+        front_wall = distance_to_wall(self.agent, cfg, 0.0, self.walls, self.exit_bounds) / cfg.sensor_range
+        left_wall = distance_to_wall(self.agent, cfg, -pi / 3, self.walls, self.exit_bounds) / cfg.sensor_range
+        right_wall = distance_to_wall(self.agent, cfg, pi / 3, self.walls, self.exit_bounds) / cfg.sensor_range
         nearest_food = (float(np.min(distances)) / cfg.sensor_range) if len(distances) else 1.0
 
         wall_sensors = 1.0 - np.clip(np.array([left_wall, front_wall, right_wall]), 0.0, 1.0)
         food_distance = np.array([1.0 - np.clip(nearest_food, 0.0, 1.0)], dtype=np.float32)
         exit_goal = np.array([690.0, float(sum(self.exit_bounds) / 2)], dtype=np.float32)
-        navigation_target = self._navigation_target(agent_pos, exit_goal)
-        exit_delta = navigation_target - agent_pos
+        exit_delta = exit_goal - agent_pos
         exit_distance = float(np.linalg.norm(exit_delta))
         exit_angle = float(wrap_angle(atan2(exit_delta[1], exit_delta[0]) - self.agent.heading))
         exit_sensors = np.array([
@@ -357,11 +338,7 @@ class FoodWorld:
         ], dtype=np.float32)
         if len(distances):
             nearest_idx = int(np.argmin(distances))
-            food_target = self._navigation_target(agent_pos, active_food[nearest_idx])
-            food_delta = food_target - agent_pos
-            nearest_angle = float(wrap_angle(
-                atan2(food_delta[1], food_delta[0]) - self.agent.heading
-            ))
+            nearest_angle = float(angles[nearest_idx])
             nearest_food_sensors = np.array([
                 (sin(nearest_angle) + 1.0) * 0.5,
                 (cos(nearest_angle) + 1.0) * 0.5,
@@ -370,7 +347,7 @@ class FoodWorld:
         else:
             nearest_food_sensors = np.array([0.5, 0.5, 0.0], dtype=np.float32)
         return np.concatenate([
-            food_rays, wall_sensors.astype(np.float32), food_distance, exit_sensors,
+            wall_rays, wall_sensors.astype(np.float32), food_distance, exit_sensors,
             nearest_food_sensors,
         ]).astype(np.float32)
 
@@ -380,15 +357,22 @@ def wrap_angle(angle: float | np.ndarray) -> float | np.ndarray:
 
 
 def distance_to_wall(agent: AgentState, cfg: EnvConfig, relative_angle: float,
-                     walls: list[MazeWall] | None = None) -> float:
+                     walls: list[MazeWall] | None = None,
+                     opening_bounds: tuple[float, float] | None = None) -> float:
     angle = agent.heading + relative_angle
     dx = cos(angle)
     dy = sin(angle)
     candidates: list[float] = []
 
     if abs(dx) > 1e-6:
-        candidates.append((cfg.agent_radius - agent.x) / dx)
-        candidates.append((cfg.width - cfg.agent_radius - agent.x) / dx)
+        left_distance = (cfg.agent_radius - agent.x) / dx
+        right_distance = (cfg.width - cfg.agent_radius - agent.x) / dx
+        left_hit_y = agent.y + dy * left_distance
+        right_hit_y = agent.y + dy * right_distance
+        if not (dx < 0 and opening_bounds and opening_bounds[0] <= left_hit_y <= opening_bounds[1]):
+            candidates.append(left_distance)
+        if not (dx > 0 and opening_bounds and opening_bounds[0] <= right_hit_y <= opening_bounds[1]):
+            candidates.append(right_distance)
     if abs(dy) > 1e-6:
         candidates.append((cfg.agent_radius - agent.y) / dy)
         candidates.append((cfg.height - cfg.agent_radius - agent.y) / dy)

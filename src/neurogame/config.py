@@ -29,7 +29,7 @@ class EnvConfig:
     sensor_range: float = 190.0
     max_speed: float = 3.0
     turn_rate: float = 0.18
-    food_count: int = 14
+    food_count: int = 0
     step_penalty: float = -0.001
     wall_penalty: float = -0.02
     food_reward: float = 1.0
@@ -39,6 +39,11 @@ class EnvConfig:
     locked_exit_penalty: float = -0.1
     progress_reward_scale: float = 0.015
     exit_progress_reward_scale: float = 0.03
+    maze_enabled: bool = True
+    base_maze_columns: int = 9
+    base_maze_rows: int = 7
+    novelty_reward: float = 0.03
+    revisit_penalty: float = 0.001
 
 
 @dataclass(frozen=True)
