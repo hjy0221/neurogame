@@ -82,3 +82,34 @@ pytest
 - Gymnasium 환경 지원
 - 실행 기록과 그래프 저장
 - 센서·행동 연결의 진화 학습 또는 강화 학습
+\n---\n\n## English
+
+NeuroGame is an experiment in which a biologically inspired neural network finds the exit of a procedurally generated maze. A recurrent spiking network receives wall and exit sensor inputs and outputs movement commands. The right-hand display shows an educational input → recurrent hidden → output architecture and activity in each layer.
+
+### Features
+
+- Python 3.12 project with approximately 500 neurons implemented in NumPy, sparse recurrent excitatory and inhibitory connections, leaky membrane potentials, spikes, refractory periods, and activity traces.
+- Reward-based Hebbian plasticity and Dense 128 → LSTM 128 recurrent PPO reinforcement learning using sensory and spiking activity.
+- A procedural 2D Pygame environment with an entrance and exit, DFS maze, junctions and dead ends, a connected traversable route, exit rewards and entrance restarts. Maze size, level, and dead ends increase at each exit; checkpoints form a learning curriculum.
+- Saveable weights, eight-direction 360° wall-distance LiDAR, front/left/right proximity sensors, exploration rewards and repeat-visit penalties, real-time network visualization, and deterministic tests.
+
+### Install and run
+
+```bash
+cd neurogame
+python3.12 -m venv .venv
+source .venv/bin/activate
+python -m pip install -U pip
+python -m pip install -e ".[dev]"
+neurogame
+```
+
+Python 3.12 is the supported baseline; basic checks may also run on earlier versions. Alternatively run `python -m neurogame.app`. The Korean section above lists examples for neuron count, seed, disabling plasticity or RL, headless training, saving a model, and evaluation.
+
+Controls: `Space` pauses/resumes, `R` resets the environment and brain, `P` toggles plasticity, `L` toggles reinforcement learning, and `Esc` exits. The neural network, not the keyboard, controls movement.
+
+Training uses multiple environments starting with seed 1; evaluation uses disjoint seeds starting with 10001. `--eval` disables exploration noise, Actor–Critic updates, and Hebbian plasticity. The policy receives no BFS path; it uses wall and exit sensors and sensor-based short-term avoidance memory.
+
+### Tests and future work
+
+Run `pytest`. In the recorded environment, Python 3.12 was unavailable, so five tests and a headless run passed using an available Python version. Possible extensions include real connectome subsets, richer pixel input, Gymnasium support, saved run graphs, and evolutionary or reinforcement learning of sensor/action connections.
