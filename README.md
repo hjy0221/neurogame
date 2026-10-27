@@ -82,7 +82,10 @@ pytest
 - Gymnasium 환경 지원
 - 실행 기록과 그래프 저장
 - 센서·행동 연결의 진화 학습 또는 강화 학습
-\n---\n\n## English
+
+---
+
+## English
 
 NeuroGame is an experiment in which a biologically inspired neural network finds the exit of a procedurally generated maze. A recurrent spiking network receives wall and exit sensor inputs and outputs movement commands. The right-hand display shows an educational input → recurrent hidden → output architecture and activity in each layer.
 
