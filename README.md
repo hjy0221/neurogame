@@ -1,5 +1,55 @@
 # NeuroGame
 
+[日本語](https://github.com/hjy0221/neurogame#%E6%97%A5%E6%9C%AC%E8%AA%9E) · [English](https://github.com/hjy0221/neurogame#english) · [한국어](https://github.com/hjy0221/neurogame#%ED%95%9C%EA%B5%AD%EC%96%B4)
+
+## 日本語
+
+NeuroGame は、生物学的な着想を得た神経ネットワークが手続き生成迷路の出口を探す実験プロジェクトです。再帰型スパイキングネットワークが壁・出口センサーを受け、移動指令を出します。
+
+### 含まれる内容
+
+- NumPy で実装した約 500 ニューロンの疎な再帰ネットワーク
+- 漏れ膜電位、スパイク、不応期、活動履歴、報酬ベースの Hebbian 可塑性
+- Dense 128 → LSTM 128 recurrent PPO による強化学習
+- 出口を目指す Pygame の DFS 迷路、距離・近接センサー、探索報酬
+- 保存可能な学習重みと、教育用のネットワーク可視化
+
+Python 3.12 を対象にしています。セットアップ、学習・評価・再開の手順、設定項目と実験上の制約は韓国語セクションに記載しています。
+
+## English
+
+NeuroGame is an experiment in which a biologically inspired neural network finds the exit of a procedurally generated maze. A recurrent spiking network receives wall and exit sensor inputs and outputs movement commands. The right-hand display shows an educational input → recurrent hidden → output architecture and activity in each layer.
+
+### Features
+
+- Python 3.12 project with approximately 500 neurons implemented in NumPy, sparse recurrent excitatory and inhibitory connections, leaky membrane potentials, spikes, refractory periods, and activity traces.
+- Reward-based Hebbian plasticity and Dense 128 → LSTM 128 recurrent PPO reinforcement learning using sensory and spiking activity.
+- A procedural 2D Pygame environment with an entrance and exit, DFS maze, junctions and dead ends, a connected traversable route, exit rewards and entrance restarts. Maze size, level, and dead ends increase at each exit; checkpoints form a learning curriculum.
+- Saveable weights, eight-direction 360° wall-distance LiDAR, front/left/right proximity sensors, exploration rewards and repeat-visit penalties, real-time network visualization, and deterministic tests.
+
+### Install and run
+
+```bash
+cd neurogame
+python3.12 -m venv .venv
+source .venv/bin/activate
+python -m pip install -U pip
+python -m pip install -e ".[dev]"
+neurogame
+```
+
+Python 3.12 is the supported baseline; basic checks may also run on earlier versions. Alternatively run `python -m neurogame.app`. The Korean section above lists examples for neuron count, seed, disabling plasticity or RL, headless training, saving a model, and evaluation.
+
+Controls: `Space` pauses/resumes, `R` resets the environment and brain, `P` toggles plasticity, `L` toggles reinforcement learning, and `Esc` exits. The neural network, not the keyboard, controls movement.
+
+Training uses multiple environments starting with seed 1; evaluation uses disjoint seeds starting with 10001. `--eval` disables exploration noise, Actor–Critic updates, and Hebbian plasticity. The policy receives no BFS path; it uses wall and exit sensors and sensor-based short-term avoidance memory.
+
+### Tests and future work
+
+Run `pytest`. In the recorded environment, Python 3.12 was unavailable, so five tests and a headless run passed using an available Python version. Possible extensions include real connectome subsets, richer pixel input, Gymnasium support, saved run graphs, and evolutionary or reinforcement learning of sensor/action connections.
+
+## 한국어
+
 NeuroGame은 생물학적으로 영감을 받은 신경망이 절차 생성 미로의 출구를 찾도록 만든 실험 프로젝트입니다. 순환형 스파이킹 신경망이 벽·출구 센서를 입력으로 받고 이동 명령을 출력합니다.
 
 화면 오른쪽에는 교육용 신경망 구조인 입력층 → 순환 중간층 → 출력층과 각 층의 활동량이 표시됩니다.
@@ -82,37 +132,3 @@ pytest
 - Gymnasium 환경 지원
 - 실행 기록과 그래프 저장
 - 센서·행동 연결의 진화 학습 또는 강화 학습
-
----
-
-## English
-
-NeuroGame is an experiment in which a biologically inspired neural network finds the exit of a procedurally generated maze. A recurrent spiking network receives wall and exit sensor inputs and outputs movement commands. The right-hand display shows an educational input → recurrent hidden → output architecture and activity in each layer.
-
-### Features
-
-- Python 3.12 project with approximately 500 neurons implemented in NumPy, sparse recurrent excitatory and inhibitory connections, leaky membrane potentials, spikes, refractory periods, and activity traces.
-- Reward-based Hebbian plasticity and Dense 128 → LSTM 128 recurrent PPO reinforcement learning using sensory and spiking activity.
-- A procedural 2D Pygame environment with an entrance and exit, DFS maze, junctions and dead ends, a connected traversable route, exit rewards and entrance restarts. Maze size, level, and dead ends increase at each exit; checkpoints form a learning curriculum.
-- Saveable weights, eight-direction 360° wall-distance LiDAR, front/left/right proximity sensors, exploration rewards and repeat-visit penalties, real-time network visualization, and deterministic tests.
-
-### Install and run
-
-```bash
-cd neurogame
-python3.12 -m venv .venv
-source .venv/bin/activate
-python -m pip install -U pip
-python -m pip install -e ".[dev]"
-neurogame
-```
-
-Python 3.12 is the supported baseline; basic checks may also run on earlier versions. Alternatively run `python -m neurogame.app`. The Korean section above lists examples for neuron count, seed, disabling plasticity or RL, headless training, saving a model, and evaluation.
-
-Controls: `Space` pauses/resumes, `R` resets the environment and brain, `P` toggles plasticity, `L` toggles reinforcement learning, and `Esc` exits. The neural network, not the keyboard, controls movement.
-
-Training uses multiple environments starting with seed 1; evaluation uses disjoint seeds starting with 10001. `--eval` disables exploration noise, Actor–Critic updates, and Hebbian plasticity. The policy receives no BFS path; it uses wall and exit sensors and sensor-based short-term avoidance memory.
-
-### Tests and future work
-
-Run `pytest`. In the recorded environment, Python 3.12 was unavailable, so five tests and a headless run passed using an available Python version. Possible extensions include real connectome subsets, richer pixel input, Gymnasium support, saved run graphs, and evolutionary or reinforcement learning of sensor/action connections.
