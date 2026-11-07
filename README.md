@@ -4,30 +4,32 @@
 
 ## 日本語
 
-NeuroGame は、生物学的な着想を得た神経ネットワークが手続き生成迷路の出口を探す実験プロジェクトです。再帰型スパイキングネットワークが壁・出口センサーを受け、移動指令を出します。
+NeuroGameは、生物学的にインスピレーションを受けたニューラルネットワークが手続き生成迷路の出口を見つけるように作った実験プロジェクトです。循環型スパイキングニューラルネットワークが壁・出口センサを入力として受け取り、移動指令を出力します。
 
-### 含まれる内容
+画面右側には、教育用ニューラルネットワーク構造である入力層→循環中間層→出力層と各層の活動量が表示されます。
 
-- NumPy で実装した約 500 ニューロンの疎な再帰ネットワーク
-- 漏れ膜電位、スパイク、不応期、活動履歴、報酬ベースの Hebbian 可塑性
-- Dense 128 → LSTM 128 recurrent PPO による強化学習
-- 出口を目指す Pygame の DFS 迷路、距離・近接センサー、探索報酬
-- 保存可能な学習重みと、教育用のネットワーク可視化
+## 埋め込み機能
 
-Python 3.12 を対象にしています。セットアップ、学習・評価・再開の手順、設定項目と実験上の制約は韓国語セクションに記載しています。
+- Python 3.12ベースのプロジェクト構造
+- NumPyで直接実装した約500個のニューロン
+- 興奮性・抑制性ニューロンを含む希少循環接続
+- 漏水膜電位、スパイク、不応器、活動の兆候
+- 報酬ベースのHebbian可塑性
+- 感覚・スパイキング活動を入力で使うDense 128 → LSTM 128 recurrent PPO強化学習
+- 出口ナビゲーションに集中するプロシージャ生成2D Pygame環境
+- 衝突と壁センサーに反映される入口・出口型DFS迷路
+- 複数の分岐路と行き止まりの道、完成可能な単一の接続経路
+- 出口到達報酬と入口再開ループ
+- 出口を通過するたびにレベル・格子・幕の長さ増加する手続き生成迷路
+- 出口経路チェックポイント補償で長い迷路でも学習可能なカリキュラム
+- 出口と壁センサーを使用した保存可能な学習重み
+- 360度8方向壁距離LiDARと前・左・右近接センサー
+- 新規セルナビゲーション報酬と繰り返し訪問減点
+- 出口探索単一強化学習目標
+- 入力層→循環層→出力層リアルタイム可視化
+- 決定論的に実行されるテスト
 
-## English
-
-NeuroGame is an experiment in which a biologically inspired neural network finds the exit of a procedurally generated maze. A recurrent spiking network receives wall and exit sensor inputs and outputs movement commands. The right-hand display shows an educational input → recurrent hidden → output architecture and activity in each layer.
-
-### Features
-
-- Python 3.12 project with approximately 500 neurons implemented in NumPy, sparse recurrent excitatory and inhibitory connections, leaky membrane potentials, spikes, refractory periods, and activity traces.
-- Reward-based Hebbian plasticity and Dense 128 → LSTM 128 recurrent PPO reinforcement learning using sensory and spiking activity.
-- A procedural 2D Pygame environment with an entrance and exit, DFS maze, junctions and dead ends, a connected traversable route, exit rewards and entrance restarts. Maze size, level, and dead ends increase at each exit; checkpoints form a learning curriculum.
-- Saveable weights, eight-direction 360° wall-distance LiDAR, front/left/right proximity sensors, exploration rewards and repeat-visit penalties, real-time network visualization, and deterministic tests.
-
-### Install and run
+## インストール
 
 ```bash
 cd neurogame
@@ -35,18 +37,140 @@ python3.12 -m venv .venv
 source .venv/bin/activate
 python -m pip install -U pip
 python -m pip install -e ".[dev]"
+```
+
+Python 3.12がない環境では、基本的な検証のために低いPythonでも実行できますが、公式の基準はPython 3.12です。
+
+## 実行
+
+```bash
 neurogame
 ```
 
-Python 3.12 is the supported baseline; basic checks may also run on earlier versions. Alternatively run `python -m neurogame.app`. The Korean section above lists examples for neuron count, seed, disabling plasticity or RL, headless training, saving a model, and evaluation.
+または`python -m neurogame.app`を実行します。
 
-Controls: `Space` pauses/resumes, `R` resets the environment and brain, `P` toggles plasticity, `L` toggles reinforcement learning, and `Esc` exits. The neural network, not the keyboard, controls movement.
+```bash
+python -m neurogame.app --neurons 500 --seed 7
+python -m neurogame.app --no-plasticity
+python -m neurogame.app --no-rl
+python -m neurogame.app --headless --steps 300
+python -m neurogame.app --headless --steps 5000 --episodes 20 --seed 1 --model NUL --save-model models/forager_exit.npz
+python -m neurogame.app --headless --eval --steps 5000 --episodes 10 --seed 10001
+python -m neurogame.app --headless --steps 10000 --episodes 10 --seed 1 --model NUL --save-model models/forager_exit.npz
+```
 
-Training uses multiple environments starting with seed 1; evaluation uses disjoint seeds starting with 10001. `--eval` disables exploration noise, Actor–Critic updates, and Hebbian plasticity. The policy receives no BFS path; it uses wall and exit sensors and sensor-based short-term avoidance memory.
+## 操作法
 
-### Tests and future work
+- `Space`：一時停止/続行
+- `R`：環境と脳状態の初期化
+- `P`：可塑性のオン/オフ
+- `L`：強化学習のオン/オフ
+- `Esc`: 終了
 
-Run `pytest`. In the recorded environment, Python 3.12 was unavailable, so five tests and a headless run passed using an available Python version. Possible extensions include real connectome subsets, richer pixel input, Gymnasium support, saved run graphs, and evolutionary or reinforcement learning of sensor/action connections.
+訓練はシード1から複数の環境を使用し、評価は重複しないシード10001から行われます。 `--eval`では、探索ノイズ、Actor-Criticアップデート、Hebbian可塑性がすべて無効になります。実行ポリシーはBFS経路を入力せず、壁・出口センサーとセンサーベースの短期回避記憶のみを使用します。
+
+エージェントの移動はキーボードではなくニューラルネットワークによって決定されます。
+
+## テスト
+
+```bash
+pytest
+```
+
+現在の環境では、Python 3.12がインストールされておらず、利用可能なPythonでテストしました。テスト5つとヘッドレス実行を正常に通過しました。
+
+## 次の拡張方向
+
+- 合成循環グラフを実際のコネクトムの一部に置き換える
+- 画面ピクセルベースの豊富な視覚入力
+- Gymnasium環境サポート
+- 実行履歴とグラフを保存
+- センサー・行動接続の進化学習または強化学習
+
+## English
+
+NeuroGame is an experimental project that challenges biologically inspired neural networks to find the exit of a procedurally generated maze. A recurrent spiking neural network receives wall and exit sensors as input and outputs movement commands.
+
+On the right side of the screen, the training neural network structure: input layer → recurrent middle layer → output layer and the amount of activity in each layer are displayed.
+
+## Included features
+
+- Project structure based on Python 3.12
+- About 500 neurons implemented directly in NumPy
+- Sparse circular connections including excitatory and inhibitory neurons
+- Leaky membrane potential, spikes, refractory period, traces of activity
+- Reward-based Hebbian plasticity
+- Dense 128 → LSTM 128 recurrent PPO reinforcement learning that uses sensory and spiking activities as input
+- 2D Pygame environment for procedural generation focusing on exit navigation
+- Entrance/exit DFS maze reflected in collision and wall sensors
+- Multiple crossroads and dead ends, single connectable route that can be completed
+- Exit arrival compensation and entrance restart loop
+- Procedurally generated maze where levels, grids, and dead ends increase with each exit you pass.
+- Curriculum that can be learned even in long mazes with exit route checkpoint rewards
+-Storable learning weights using exit and wall sensors
+- 360-degree 8-way wall distance LiDAR and front, left, and right proximity sensors
+- New cell search rewards and repeated visit deductions
+- Exit search single reinforcement learning goal
+- Input layer → circulation layer → output layer real-time visualization
+- Tests run deterministically
+
+## Installation
+
+```bash
+cd neurogame
+python3.12 -m venv .venv
+source .venv/bin/activate
+python -m pip install -U pip
+python -m pip install -e ".[dev]"
+```
+
+In environments without Python 3.12, it may run on lower Python for basic verification, but the official baseline is Python 3.12.
+
+## run
+
+```bash
+neurogame
+```
+
+Or run `python -m neurogame.app`.
+
+```bash
+python -m neurogame.app --neurons 500 --seed 7
+python -m neurogame.app --no-plasticity
+python -m neurogame.app --no-rl
+python -m neurogame.app --headless --steps 300
+python -m neurogame.app --headless --steps 5000 --episodes 20 --seed 1 --model NUL --save-model models/forager_exit.npz
+python -m neurogame.app --headless --eval --steps 5000 --episodes 10 --seed 10001
+python -m neurogame.app --headless --steps 10000 --episodes 10 --seed 1 --model NUL --save-model models/forager_exit.npz
+```
+
+## Controls
+
+- `Space`: Pause / Continue
+- `R`: Reset environment and brain state
+- `P`: Turn plasticity on/off
+- `L`: Turn reinforcement learning on/off
+- `Esc`: Closed
+
+Training uses multiple environments starting from seed 1, and evaluation is performed starting from seed 10001, which does not overlap. Exploration noise, Actor–Critic updates, and Hebbian plasticity are all disabled in `--eval`. The execution policy does not take BFS path input and uses only wall/exit sensors and sensor-based short-term avoidance memory.
+
+The agent's movements are determined by a neural network, not the keyboard.
+
+## test
+
+```bash
+pytest
+```
+
+In my current environment I don't have Python 3.12 installed, so I tested with whatever Python was available. Five tests and headless execution passed successfully.
+
+## Next expansion direction
+
+- Replace synthetic cyclic graphs with parts of real connectomes
+- Rich visual input based on screen pixels
+- Gymnasium environment support
+- Save execution records and graphs
+- Evolutionary learning or reinforcement learning of sensor-behavior connection
 
 ## 한국어
 
