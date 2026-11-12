@@ -4,6 +4,8 @@
 
 ## 日本語
 
+[日本語](https://github.com/hjy0221/neurogame#%E6%97%A5%E6%9C%AC%E8%AA%9E) · [English](https://github.com/hjy0221/neurogame#english) · [한국어](https://github.com/hjy0221/neurogame#%ED%95%9C%EA%B5%AD%EC%96%B4)
+
 NeuroGameは、生物学的にインスピレーションを受けたニューラルネットワークが手続き生成迷路の出口を見つけるように作った実験プロジェクトです。循環型スパイキングニューラルネットワークが壁・出口センサを入力として受け取り、移動指令を出力します。
 
 画面右側には、教育用ニューラルネットワーク構造である入力層→循環中間層→出力層と各層の活動量が表示されます。
@@ -89,6 +91,8 @@ pytest
 
 ## English
 
+[日本語](https://github.com/hjy0221/neurogame#%E6%97%A5%E6%9C%AC%E8%AA%9E) · [English](https://github.com/hjy0221/neurogame#english) · [한국어](https://github.com/hjy0221/neurogame#%ED%95%9C%EA%B5%AD%EC%96%B4)
+
 NeuroGame is an experimental project that challenges biologically inspired neural networks to find the exit of a procedurally generated maze. A recurrent spiking neural network receives wall and exit sensors as input and outputs movement commands.
 
 On the right side of the screen, the training neural network structure: input layer → recurrent middle layer → output layer and the amount of activity in each layer are displayed.
@@ -173,6 +177,8 @@ In my current environment I don't have Python 3.12 installed, so I tested with w
 - Evolutionary learning or reinforcement learning of sensor-behavior connection
 
 ## 한국어
+
+[日本語](https://github.com/hjy0221/neurogame#%E6%97%A5%E6%9C%AC%E8%AA%9E) · [English](https://github.com/hjy0221/neurogame#english) · [한국어](https://github.com/hjy0221/neurogame#%ED%95%9C%EA%B5%AD%EC%96%B4)
 
 NeuroGame은 생물학적으로 영감을 받은 신경망이 절차 생성 미로의 출구를 찾도록 만든 실험 프로젝트입니다. 순환형 스파이킹 신경망이 벽·출구 센서를 입력으로 받고 이동 명령을 출력합니다.
 
